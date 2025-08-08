@@ -1,0 +1,149 @@
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+
+const app = express();
+const port = 3000;
+const directoryPath = path.join(__dirname);
+
+app.use(express.static(__dirname));
+
+app.get('/', (req, res) => {
+    fs.readdir(directoryPath, (err, files) => {
+        if (err) {
+            return res.status(500).send('Unable to scan directory: ' + err.message);
+        }
+        const htmlFiles = files.filter(file => file.endsWith('.htm') || file.endsWith('.html'));
+        
+        // Sort files by last modified time (newest first)
+        htmlFiles.sort((a, b) => {
+            const statA = fs.statSync(path.join(directoryPath, a));
+            const statB = fs.statSync(path.join(directoryPath, b));
+            return statB.mtimeMs - statA.mtimeMs;
+        });
+
+        let gridHtml = '';
+        htmlFiles.forEach(file => {
+            const thumbnailName = path.parse(file).name + '.png'; // Match HTML name with .png
+            gridHtml += `
+                <div class="box">
+                    <a href="${file}" target="_blank" class="preview-link">
+                        <img src="${thumbnailName}" alt="${file}" class="thumbnail" loading="lazy">
+                    </a>
+                    <div class="filename">${file}</div>
+                </div>
+            `;
+        });
+        const html = `
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Grid Layout with HTML Previews</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        margin: 0;
+                        padding: 20px;
+                        background-color: #000;
+                    }
+                    .search-container {
+                        text-align: center;
+                        margin-bottom: 20px;
+                    }
+                    .search-container input {
+                        width: 300px;
+                        padding: 10px;
+                        font-size: 16px;
+                        border: 2px solid #ccc;
+                        border-radius: 4px;
+                        outline: none;
+                        background-color: #fff;
+                        color: #000;
+                    }
+                    .grid {
+                        display: grid;
+                        grid-template-columns: repeat(4, 1fr);
+                        gap: 20px;
+                        max-width: 1500px;
+                        margin: 0 auto;
+                    }
+                    .box {
+                        background-color: #222;
+                        height: 0;
+                        padding-bottom: 84.375%; /* 50% bigger (56.25% * 1.5) */
+                        position: relative;
+                        border-radius: 10px;
+                        overflow: hidden;
+                    }
+                    .preview-link {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        text-decoration: none;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .thumbnail {
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                        border-radius: 10px;
+                    }
+                    .filename {
+                        color: #fff;
+                        text-align: center;
+                        margin-top: 50px;
+                        font-size: 14px;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        position: relative;
+                        bottom: 20px;
+                    }
+                    .box:hover {
+                        background-color: #333; /* Hover animation */
+                    }
+                    @media (max-width: 800px) {
+                        .grid {
+                            grid-template-columns: repeat(2, 1fr);
+                        }
+                    }
+                    @media (max-width: 400px) {
+                        .grid {
+                            grid-template-columns: 1fr;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="search-container">
+                    <label for="search">Search</label>
+                    <input type="text" id="search" placeholder="Search..." onkeyup="filterBoxes()">
+                </div>
+                <div class="grid" id="grid">${gridHtml}</div>
+
+                <script>
+                    function filterBoxes() {
+                        const input = document.getElementById('search').value.toLowerCase();
+                        const boxes = document.getElementById('grid').getElementsByClassName('box');
+                        for (let i = 0; i < boxes.length; i++) {
+                            const filename = boxes[i].getElementsByClassName('filename')[0].textContent.toLowerCase();
+                            boxes[i].style.display = filename.indexOf(input) === -1 ? 'none' : 'block';
+                        }
+                    }
+                </script>
+            </body>
+            </html>
+        `;
+        res.send(html);
+    });
+});
+
+app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+});
